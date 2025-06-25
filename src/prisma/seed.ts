@@ -38,6 +38,16 @@ export const generateComment = async (id: number, slug: string) =>
 
 const main = async () => {
   try {
+    const existing = await prisma.user.findUnique({ where: { email: 'realworld@me' } });
+    if (!existing) {
+      await await createUser({
+        username: 'RealWorld',
+        email: 'realworld@me',
+        password: 'test123', // plaintext input; service should hash
+        image: 'https://api.realworld.io/images/smiley-cyrus.jpeg',
+        demo: true,
+      });
+    }
     const users = await Promise.all(Array.from({length: 12}, () => generateUser()));
     users?.map(user => user);
 
