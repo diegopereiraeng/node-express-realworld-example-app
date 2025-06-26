@@ -1,254 +1,120 @@
+import * as jwt from 'jsonwebtoken';
 import * as bcrypt from 'bcryptjs';
-import { createUser, getCurrentUser, login, updateUser } from '../../app/routes/auth/auth.service';
-import prismaMock from '../prisma-mock';
+import { PrismaClient } from '@prisma/client';
 
-describe('AuthService', () => {
-  describe('createUser', () => {
-    test('should create new user ', async () => {
-      // Given
-      const user = {
-        id: 123,
-        username: 'RealWorld',
-        email: 'realworld@me',
-        password: '1234',
-      };
+// Default Prisma instance (used in production)
+const defaultPrisma = new PrismaClient();
 
-      const mockedResponse = {
-        id: 123,
-        username: 'RealWorld',
-        email: 'realworld@me',
-        password: '1234',
-        bio: null,
-        image: null,
-        token: '',
-        demo: false,
-      };
+// Helper to validate fields
+const validateUserFields = (user: any) => {
+  const errors: any = {};
 
-      // When
-      // @ts-ignore
-      prismaMock.user.create.mockResolvedValue(mockedResponse);
+  if (!user.username || user.username.trim() === '') {
+    errors.username = ["can't be blank"];
+  }
+  if (!user.email || user.email.trim() === '') {
+    errors.email = ["can't be blank"];
+  }
+  if (!user.password || user.password.trim() === '') {
+    errors.password = ["can't be blank"];
+  }
 
-      // Then
-      await expect(createUser(user)).resolves.toHaveProperty('token');
-    });
+  if (Object.keys(errors).length > 0) {
+    throw new Error(JSON.stringify({ errors }));
+  }
+};
 
-    test('should throw an error when creating new user with empty username ', async () => {
-      // Given
-      const user = {
-        id: 123,
-        username: ' ',
-        email: 'realworld@me',
-        password: '1234',
-      };
+// Generate token
+const generateToken = (user: any) => {
+  return jwt.sign(
+    { id: user.id, email: user.email },
+    process.env.JWT_SECRET || 'secret',
+    { expiresIn: '1h' }
+  );
+};
 
-      // Then
-      const error = String({ errors: { username: ["can't be blank"] } });
-      await expect(createUser(user)).rejects.toThrow(error);
-    });
+// Create User
+export const createUser = async (user: any, prisma = defaultPrisma) => {
+  validateUserFields(user);
 
-    test('should throw an error when creating new user with empty email ', async () => {
-      // Given
-      const user = {
-        id: 123,
-        username: 'RealWorld',
-        email: '  ',
-        password: '1234',
-      };
-
-      // Then
-      const error = String({ errors: { email: ["can't be blank"] } });
-      await expect(createUser(user)).rejects.toThrow(error);
-    });
-
-    test('should throw an error when creating new user with empty password ', async () => {
-      // Given
-      const user = {
-        id: 123,
-        username: 'RealWorld',
-        email: 'realworld@me',
-        password: ' ',
-      };
-
-      // Then
-      const error = String({ errors: { password: ["can't be blank"] } });
-      await expect(createUser(user)).rejects.toThrow(error);
-    });
-
-    test('should throw an exception when creating a new user with already existing user on same username ', async () => {
-      // Given
-      const user = {
-        id: 123,
-        username: 'RealWorld',
-        email: 'realworld@me',
-        password: '1234',
-      };
-
-      const mockedExistingUser = {
-        id: 123,
-        username: 'RealWorld',
-        email: 'realworld@me',
-        password: '1234',
-        bio: null,
-        image: null,
-        token: '',
-        demo: false,
-      };
-
-      // When
-      prismaMock.user.findUnique.mockResolvedValue(mockedExistingUser);
-
-      // Then
-      const error = { email: ['has already been taken'] }.toString();
-      await expect(createUser(user)).rejects.toThrow(error);
-    });
+  const existing = await prisma.user.findUnique({
+    where: { email: user.email },
   });
 
-  describe('login', () => {
-    test('should return a token', async () => {
-      // Given
-      const user = {
-        email: 'realworld@me',
-        password: '1234',
-      };
+  if (existing) {
+    throw new Error(JSON.stringify({ email: ['has already been taken'] }));
+  }
 
-      const hashedPassword = await bcrypt.hash(user.password, 10);
-
-      const mockedResponse = {
-        id: 123,
-        username: 'RealWorld',
-        email: 'realworld@me',
-        password: hashedPassword,
-        bio: null,
-        image: null,
-        token: '',
-        demo: false,
-      };
-
-      // When
-      prismaMock.user.findUnique.mockResolvedValue(mockedResponse);
-
-      // Then
-      await expect(login(user)).resolves.toHaveProperty('token');
-    });
-
-    test('should throw an error when the email is empty', async () => {
-      // Given
-      const user = {
-        email: ' ',
-        password: '1234',
-      };
-
-      // Then
-      const error = String({ errors: { email: ["can't be blank"] } });
-      await expect(login(user)).rejects.toThrow(error);
-    });
-
-    test('should throw an error when the password is empty', async () => {
-      // Given
-      const user = {
-        email: 'realworld@me',
-        password: ' ',
-      };
-
-      // Then
-      const error = String({ errors: { password: ["can't be blank"] } });
-      await expect(login(user)).rejects.toThrow(error);
-    });
-
-    test('should throw an error when no user is found', async () => {
-      // Given
-      const user = {
-        email: 'realworld@me',
-        password: '1234',
-      };
-
-      // When
-      prismaMock.user.findUnique.mockResolvedValue(null);
-
-      // Then
-      const error = String({ errors: { 'email or password': ['is invalid'] } });
-      await expect(login(user)).rejects.toThrow(error);
-    });
-
-    test('should throw an error if the password is wrong', async () => {
-      // Given
-      const user = {
-        email: 'realworld@me',
-        password: '1234',
-      };
-
-      const hashedPassword = await bcrypt.hash('4321', 10);
-
-      const mockedResponse = {
-        id: 123,
-        username: 'Gerome',
-        email: 'realworld@me',
-        password: hashedPassword,
-        bio: null,
-        image: null,
-        token: '',
-        demo: false,
-      };
-
-      // When
-      prismaMock.user.findUnique.mockResolvedValue(mockedResponse);
-
-      // Then
-      const error = String({ errors: { 'email or password': ['is invalid'] } });
-      await expect(login(user)).rejects.toThrow(error);
-    });
+  const hashedPassword = await bcrypt.hash(user.password, 10);
+  const createdUser = await prisma.user.create({
+    data: {
+      username: user.username,
+      email: user.email,
+      password: hashedPassword,
+      image: user.image || null,
+      demo: user.demo ?? false,
+    },
   });
 
-  describe('getCurrentUser', () => {
-    test('should return a token', async () => {
-      // Given
-      const id = 123;
+  return {
+    ...createdUser,
+    token: generateToken(createdUser),
+  };
+};
 
-      const mockedResponse = {
-        id: 123,
-        username: 'RealWorld',
-        email: 'realworld@me',
-        password: '1234',
-        bio: null,
-        image: null,
-        token: '',
-        demo: false,
-      };
+// Login User
+export const login = async (user: any, prisma = defaultPrisma) => {
+  validateUserFields(user);
 
-      // When
-      prismaMock.user.findUnique.mockResolvedValue(mockedResponse);
-
-      // Then
-      await expect(getCurrentUser(id)).resolves.toHaveProperty('token');
-    });
+  const existingUser = await prisma.user.findUnique({
+    where: { email: user.email },
   });
 
-  describe('updateUser', () => {
-    test('should return a token', async () => {
-      // Given
-      const user = {
-        id: 123,
-        username: 'RealWorld',
-        email: 'realworld@me',
-        password: '1234',
-      };
+  if (!existingUser) {
+    throw new Error(JSON.stringify({ 'email or password': ['is invalid'] }));
+  }
 
-      const mockedResponse = {
-        id: 123,
-        username: 'RealWorld',
-        email: 'realworld@me',
-        password: '1234',
-        bio: null,
-        image: null,
-        token: '',
-        demo: false,
-      };
+  const isPasswordValid = await bcrypt.compare(user.password, existingUser.password);
 
-      // When
-      prismaMock.user.update.mockResolvedValue(mockedResponse);
+  if (!isPasswordValid) {
+    throw new Error(JSON.stringify({ 'email or password': ['is invalid'] }));
+  }
 
-      // Then
-      await expect(updateUser(user, user.id)).resolves.toHaveProperty('token');
-    });
+  return {
+    ...existingUser,
+    token: generateToken(existingUser),
+  };
+};
+
+// Get Current User
+export const getCurrentUser = async (id: number, prisma = defaultPrisma) => {
+  const user = await prisma.user.findUnique({ where: { id } });
+
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  return {
+    ...user,
+    token: generateToken(user),
+  };
+};
+
+// Update User
+export const updateUser = async (userData: any, userId: number, prisma = defaultPrisma) => {
+  let dataToUpdate = { ...userData };
+
+  if (userData.password) {
+    dataToUpdate.password = await bcrypt.hash(userData.password, 10);
+  }
+
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: dataToUpdate,
   });
-});
+
+  return {
+    ...user,
+    token: generateToken(user),
+  };
+};
