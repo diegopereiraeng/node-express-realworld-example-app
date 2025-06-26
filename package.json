@@ -26,7 +26,8 @@
     "tslib": "^2.3.0",
     "aws-sdk": "^2.1566.0",
     "firebase": "^10.7.1",
-    "sharp": "^0.33.3"
+    "sharp": "^0.33.3",
+    "playwright": "^1.44.0"
   },
   "devDependencies": {
     "@nx/esbuild": "17.2.6",
