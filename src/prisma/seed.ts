@@ -25,14 +25,13 @@ export const generateUser = async (): Promise<RegisteredUser> =>
 
 
 
-export const generateArticle = async (id: number) =>
+const generateArticle = async (id: number) =>
   createArticle(
     {
-      title: randPhrase(),
+      title: `${randPhrase()} ${uuidv4().slice(0, 8)}`,
       description: randParagraph(),
       body: randLines({ length: 10 }).join(' '),
       tagList: randWord({ length: 4 }),
-      slug: `${randWord()}-${uuidv4().slice(0, 8)}`, // add this if your slug isn't generated internally
     },
     id,
   );
