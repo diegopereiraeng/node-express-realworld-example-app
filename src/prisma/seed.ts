@@ -3,9 +3,8 @@ import {
   randFullName,
   randLines,
   randParagraph,
-  randPassword,
-  randPhrase,
-  randWord,
+  randPassword, randPhrase,
+  randWord
 } from '@ngneat/falso';
 import { v4 as uuidv4 } from 'uuid';
 import { PrismaClient } from '@prisma/client';
@@ -15,7 +14,6 @@ import { addComment, createArticle } from '../app/routes/article/article.service
 
 const prisma = new PrismaClient();
 
-// Generate unique users
 export const generateUser = async (): Promise<RegisteredUser> =>
   createUser({
     username: randFullName(),
@@ -25,66 +23,58 @@ export const generateUser = async (): Promise<RegisteredUser> =>
     demo: true,
   });
 
-// Generate unique articles
-const generateArticle = async (authorId: number) =>
+
+
+export const generateArticle = async (id: number) =>
   createArticle(
     {
-      title: `${randPhrase()} ${uuidv4().slice(0, 8)}`,
+      title: randPhrase(),
       description: randParagraph(),
       body: randLines({ length: 10 }).join(' '),
       tagList: randWord({ length: 4 }),
-      slug: `${randWord()}-${uuidv4().slice(0, 8)}`, // Ensure unique slug
+      slug: `${randWord()}-${uuidv4().slice(0, 8)}`, // add this if your slug isn't generated internally
     },
-    authorId,
+    id,
   );
 
-// Generate a comment
-export const generateComment = async (userId: number, slug: string) =>
-  addComment(randParagraph(), slug, userId);
+export const generateComment = async (id: number, slug: string) =>
+  addComment(randParagraph(), slug, id);
 
-// Main seeding logic
 const main = async () => {
   try {
-    // Create known fixed test user
-    const existing = await prisma.user.findUnique({
-      where: { email: 'realworld@me' },
-    });
-
+    const existing = await prisma.user.findUnique({ where: { email: 'realworld@me' } });
     if (!existing) {
-      await createUser({
+      await await createUser({
         username: 'RealWorld',
         email: 'realworld@me',
-        password: 'test123',
+        password: 'test123', // plaintext input; service should hash
         image: 'https://api.realworld.io/images/smiley-cyrus.jpeg',
         demo: true,
       });
     }
+    const users = await Promise.all(Array.from({length: 12}, () => generateUser()));
+    users?.map(user => user);
 
-    // Generate 12 users
-    const users = await Promise.all(
-      Array.from({ length: 12 }, () => generateUser())
-    );
+    // eslint-disable-next-line no-restricted-syntax
+    for await (const user of users) {
+      const articles = await Promise.all(Array.from({length: 12}, () => generateArticle(user.id)));
 
-    // For each user, generate 12 articles with unique slugs
-    for (const user of users) {
-      const articles = await Promise.all(
-        Array.from({ length: 12 }, () => generateArticle(user.id))
-      );
-
-      // For each article, add comments from all users
-      for (const article of articles) {
-        await Promise.all(
-          users.map((userItem) =>
-            generateComment(userItem.id, article.slug)
-          )
-        );
+      // eslint-disable-next-line no-restricted-syntax
+      for await (const article of articles) {
+        await Promise.all(users.map(userItem => generateComment(userItem.id, article.slug)));
       }
     }
   } catch (e) {
-    console.error('❌ Seed error:', e);
-  } finally {
-    await prisma.$disconnect();
+    console.error(e);
+
   }
 };
 
-main().catch(() => process.exit(1));
+main()
+  .then(async () => {
+    await prisma.$disconnect();
+  })
+  .catch(async () => {
+    await prisma.$disconnect();
+    process.exit(1);
+  });
