@@ -6,6 +6,7 @@ import {
   randPassword, randPhrase,
   randWord
 } from '@ngneat/falso';
+import { v4 as uuidv4 } from 'uuid';
 import { PrismaClient } from '@prisma/client';
 import { RegisteredUser } from '../app/routes/auth/registered-user.model';
 import { createUser } from '../app/routes/auth/auth.service';
@@ -22,6 +23,8 @@ export const generateUser = async (): Promise<RegisteredUser> =>
     demo: true,
   });
 
+
+
 export const generateArticle = async (id: number) =>
   createArticle(
     {
@@ -29,6 +32,7 @@ export const generateArticle = async (id: number) =>
       description: randParagraph(),
       body: randLines({ length: 10 }).join(' '),
       tagList: randWord({ length: 4 }),
+      slug: `${randWord()}-${uuidv4().slice(0, 8)}`, // add this if your slug isn't generated internally
     },
     id,
   );
